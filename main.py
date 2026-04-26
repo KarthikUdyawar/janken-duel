@@ -7,8 +7,8 @@ from game.effects import ScreenShake, FlashOverlay
 from game.ai import AI
 from game.score import ScoreTracker
 from game.combo import ComboTracker
+from game.taunts import TauntEngine
 
-score = ScoreTracker()
 pygame.init()
 
 SCREEN_W, SCREEN_H = 800, 600
@@ -23,6 +23,9 @@ font_lg = pygame.font.SysFont("dejavusans", 72)
 
 shake = ScreenShake()
 flash = FlashOverlay()
+combo = ComboTracker()
+score = ScoreTracker()
+taunt = TauntEngine()
 
 MAX_HP = 5
 DIFFICULTIES = ["easy", "medium", "hard"]
@@ -51,7 +54,8 @@ def make_state(difficulty="medium"):
         "winner": None,
         "ai": AI(difficulty),
         "difficulty": difficulty,
-        "combo": ComboTracker(),
+        "combo": combo,
+        "taunt": taunt,
     }
 
 
@@ -109,6 +113,11 @@ def draw_combo(surface):
             color = (255, 255, 100)
         draw_text(surface, label, 140, color, font_sm)
 
+def draw_taunt(surface):
+    txt = taunt.get()
+    if txt:
+        surf = font_sm.render(f'AI: "{txt}"', True, (220, 180, 255))
+        surface.blit(surf, surf.get_rect(center=(SCREEN_W // 2, 80)))
 
 OUTCOME_COLOR = {
     "WIN": (100, 255, 100),
@@ -140,6 +149,9 @@ while running:
                     g = make_state(DIFFICULTIES[selected_diff_idx])
                     shake = ScreenShake()
                     flash = FlashOverlay()
+                elif event.key == pygame.K_t:
+                    enabled = taunt.toggle()
+                    taunt.current_taunt = "Ollama ON" if enabled else "Offline mode"
 
             # JANKEN INPUT
             elif sm.is_state(State.JANKEN_INPUT):
@@ -203,15 +215,21 @@ while running:
                     g["ai_hp"] = max(0, g["ai_hp"] - 1 - bonus)
                     flash.trigger((255, 80, 80), 250)
                     shake.trigger(200 + bonus * 100, 6 + bonus * 4)
+                    taunt.trigger("hit", g)
                 else:
                     g["player_hp"] = max(0, g["player_hp"] - 1 - bonus)
                     flash.trigger((80, 80, 255), 250)
                     shake.trigger(300 + bonus * 100, 10 + bonus * 4)
+                    taunt.trigger("lose" if g["player_hp"] <= 1 else "low_hp", g)
+                if g["combo"].count >= 3:
+                    taunt.trigger("combo", {"combo_count": g["combo"].count, **g})
             else:
                 g["combo"].miss()
+                taunt.trigger("miss", g)
 
             if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
                 g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
+                taunt.trigger("win" if g["winner"] == "ai" else "lose", g)
                 if g["winner"] == "player":
                     score.record_win()
                 else:
@@ -245,6 +263,7 @@ while running:
         draw_difficulty_label(rs)
         draw_score(rs)
         draw_combo(rs)
+        draw_taunt(rs)
 
         if sm.is_state(State.JANKEN_INPUT):
             draw_text(rs, "Make your move!", 220)
