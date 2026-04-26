@@ -2,12 +2,8 @@ import pygame
 import sys
 from game.state_manager import StateManager, State
 from game.janken import KEY_MAP as JANKEN_KEYS, ai_move, resolve as janken_resolve
-from game.pointing import (
-    Direction,
-    KEY_MAP as DIR_KEYS,
-    ai_direction,
-    resolve as point_resolve,
-)
+from game.pointing import KEY_MAP as DIR_KEYS, ai_direction, resolve as point_resolve
+from game.effects import ScreenShake, FlashOverlay
 
 pygame.init()
 
@@ -20,6 +16,9 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont("dejavusans", 48)
 font_sm = pygame.font.SysFont("dejavusans", 32)
 font_lg = pygame.font.SysFont("dejavusans", 72)
+
+shake = ScreenShake()
+flash = FlashOverlay()
 
 MAX_HP = 5
 
@@ -42,33 +41,8 @@ def make_state():
 
 
 g = make_state()
+
 RESULT_MS = 1500
-
-
-def draw_text(text, y, color=(255, 255, 255), f=None):
-    f = f or font
-    surf = f.render(text, True, color)
-    rect = surf.get_rect(center=(SCREEN_W // 2, y))
-    screen.blit(surf, rect)
-
-
-def draw_hp():
-    # AI HP — top
-    ai_label = font_sm.render(
-        f"AI HP:  {'[ ]' * g['ai_hp']}{'[X]' * (MAX_HP - g['ai_hp'])}",
-        True,
-        (255, 120, 120),
-    )
-    screen.blit(ai_label, (20, 20))
-    # Player HP — bottom
-    pl_label = font_sm.render(
-        f"YOU HP: {'[ ]' * g['player_hp']}{'[X]' * (MAX_HP - g['player_hp'])}",
-        True,
-        (120, 200, 255),
-    )
-    screen.blit(pl_label, (20, SCREEN_H - 40))
-
-
 OUTCOME_COLOR = {
     "WIN": (100, 255, 100),
     "LOSE": (255, 100, 100),
@@ -117,6 +91,8 @@ while running:
             elif sm.is_state(State.GAME_OVER):
                 if event.key == pygame.K_r:
                     g = make_state()
+                    shake = ScreenShake()
+                    flash = FlashOverlay()
                     continue
 
     # Auto-advance
@@ -136,9 +112,12 @@ while running:
             if g["point_hit"]:
                 if g["attacker"] == "player":
                     g["ai_hp"] = max(0, g["ai_hp"] - 1)
+                    flash.trigger((255, 80, 80), 250)  # red — AI hit
+                    shake.trigger(200, 6)
                 else:
                     g["player_hp"] = max(0, g["player_hp"] - 1)
-            # Check game over
+                    flash.trigger((80, 80, 255), 250)  # blue — player hit
+                    shake.trigger(300, 10)
             if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
                 g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
                 sm.transition(State.GAME_OVER)
@@ -146,7 +125,33 @@ while running:
                 sm.transition(State.JANKEN_INPUT)
 
     # --- Draw ---
-    screen.fill((20, 20, 30))
+    ox, oy = shake.update(dt)
+    render_surface = pygame.Surface((SCREEN_W, SCREEN_H))
+    render_surface.fill((20, 20, 30))
+
+    # draw to render_surface via temp redirect
+    _blit = screen.blit
+
+    def draw_text(text, y, color=(255, 255, 255), f=None):
+        f = f or font
+        surf = f.render(text, True, color)
+        rect = surf.get_rect(center=(SCREEN_W // 2, y))
+        render_surface.blit(surf, rect)
+
+    def draw_hp():
+        ai_label = font_sm.render(
+            f"AI HP:  {'[ ]' * g['ai_hp']}{'[X]' * (MAX_HP - g['ai_hp'])}",
+            True,
+            (255, 120, 120),
+        )
+        render_surface.blit(ai_label, (20, 20))
+        pl_label = font_sm.render(
+            f"YOU HP: {'[ ]' * g['player_hp']}{'[X]' * (MAX_HP - g['player_hp'])}",
+            True,
+            (120, 200, 255),
+        )
+        render_surface.blit(pl_label, (20, SCREEN_H - 40))
+
     draw_hp()
 
     if sm.is_state(State.MENU):
@@ -194,6 +199,8 @@ while running:
             draw_text("YOU LOSE!", 240, (255, 80, 80), font_lg)
         draw_text("Press R to play again", 340, (180, 180, 180), font_sm)
 
+    flash.update(dt, render_surface)
+    screen.blit(render_surface, (ox, oy))
     pygame.display.flip()
 
 pygame.quit()
