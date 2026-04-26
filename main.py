@@ -6,6 +6,7 @@ from game.pointing import KEY_MAP as DIR_KEYS, resolve as point_resolve
 from game.effects import ScreenShake, FlashOverlay
 from game.ai import AI
 from game.score import ScoreTracker
+from game.combo import ComboTracker
 
 score = ScoreTracker()
 pygame.init()
@@ -50,6 +51,7 @@ def make_state(difficulty="medium"):
         "winner": None,
         "ai": AI(difficulty),
         "difficulty": difficulty,
+        "combo": ComboTracker(),
     }
 
 
@@ -93,6 +95,19 @@ def draw_difficulty_label(surface):
     color = DIFF_COLORS[g["difficulty"]]
     surf = font_sm.render(f"[ {diff} ]", True, color)
     surface.blit(surf, (SCREEN_W - surf.get_width() - 20, 20))
+
+
+def draw_combo(surface):
+    combo = g["combo"].count
+    if combo >= 2:
+        label = f"COMBO x{combo}!"
+        if combo >= 6:
+            color = (255, 50, 50)
+        elif combo >= 3:
+            color = (255, 180, 0)
+        else:
+            color = (255, 255, 100)
+        draw_text(surface, label, 140, color, font_sm)
 
 
 OUTCOME_COLOR = {
@@ -183,14 +198,18 @@ while running:
         if g["result_timer"] <= 0:
             # Apply damage
             if g["point_hit"]:
+                bonus = g["combo"].hit()
                 if g["attacker"] == "player":
-                    g["ai_hp"] = max(0, g["ai_hp"] - 1)
-                    flash.trigger((255, 80, 80), 250)  # red — AI hit
-                    shake.trigger(200, 6)
+                    g["ai_hp"] = max(0, g["ai_hp"] - 1 - bonus)
+                    flash.trigger((255, 80, 80), 250)
+                    shake.trigger(200 + bonus * 100, 6 + bonus * 4)
                 else:
-                    g["player_hp"] = max(0, g["player_hp"] - 1)
-                    flash.trigger((80, 80, 255), 250)  # blue — player hit
-                    shake.trigger(300, 10)
+                    g["player_hp"] = max(0, g["player_hp"] - 1 - bonus)
+                    flash.trigger((80, 80, 255), 250)
+                    shake.trigger(300 + bonus * 100, 10 + bonus * 4)
+            else:
+                g["combo"].miss()
+
             if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
                 g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
                 if g["winner"] == "player":
@@ -225,6 +244,7 @@ while running:
         draw_hp(rs)
         draw_difficulty_label(rs)
         draw_score(rs)
+        draw_combo(rs)
 
         if sm.is_state(State.JANKEN_INPUT):
             draw_text(rs, "Make your move!", 220)
@@ -276,11 +296,19 @@ while running:
             else:
                 draw_text(rs, "YOU LOSE!", 220, (255, 80, 80), font_lg)
             draw_text(rs, "R = play again   M = menu", 340, (180, 180, 180), font_sm)
+            if g["combo"].max_combo >= 2:
+                draw_text(
+                    rs,
+                    f"Best combo: x{g['combo'].max_combo}",
+                    390,
+                    (255, 200, 50),
+                    font_sm,
+                )
             if score.rounds > 0:
                 draw_text(
                     rs,
                     f"Session: {score.wins}W - {score.losses}L  ({score.win_rate()})",
-                    420,
+                    430,
                     (120, 120, 120),
                     font_sm,
                 )
