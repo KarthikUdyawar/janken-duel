@@ -3,6 +3,7 @@ import sys
 from game.state_manager import StateManager, State
 from game.janken import KEY_MAP as JANKEN_KEYS, ai_move, resolve as janken_resolve
 from game.pointing import (
+    Direction,
     KEY_MAP as DIR_KEYS,
     ai_direction,
     resolve as point_resolve,
@@ -18,21 +19,29 @@ pygame.display.set_caption("Janken Duel")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("dejavusans", 48)
 font_sm = pygame.font.SysFont("dejavusans", 32)
+font_lg = pygame.font.SysFont("dejavusans", 72)
 
-sm = StateManager()
+MAX_HP = 5
 
-# Janken state
-player_move = None
-ai_move_choice = None
-janken_outcome = None
 
-# Pointing state
-attacker = None  # "player" or "ai"
-player_dir = None
-ai_dir = None
-point_hit = None
+def make_state():
+    return {
+        "sm": StateManager(),
+        "player_move": None,
+        "ai_move_choice": None,
+        "janken_outcome": None,
+        "attacker": None,
+        "player_dir": None,
+        "ai_dir": None,
+        "point_hit": None,
+        "player_hp": MAX_HP,
+        "ai_hp": MAX_HP,
+        "result_timer": 0,
+        "winner": None,
+    }
 
-result_timer = 0
+
+g = make_state()
 RESULT_MS = 1500
 
 
@@ -41,6 +50,23 @@ def draw_text(text, y, color=(255, 255, 255), f=None):
     surf = f.render(text, True, color)
     rect = surf.get_rect(center=(SCREEN_W // 2, y))
     screen.blit(surf, rect)
+
+
+def draw_hp():
+    # AI HP — top
+    ai_label = font_sm.render(
+        f"AI HP:  {'[ ]' * g['ai_hp']}{'[X]' * (MAX_HP - g['ai_hp'])}",
+        True,
+        (255, 120, 120),
+    )
+    screen.blit(ai_label, (20, 20))
+    # Player HP — bottom
+    pl_label = font_sm.render(
+        f"YOU HP: {'[ ]' * g['player_hp']}{'[X]' * (MAX_HP - g['player_hp'])}",
+        True,
+        (120, 200, 255),
+    )
+    screen.blit(pl_label, (20, SCREEN_H - 40))
 
 
 OUTCOME_COLOR = {
@@ -52,98 +78,121 @@ OUTCOME_COLOR = {
 running = True
 while running:
     dt = clock.tick(FPS)
+    sm = g["sm"]
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
         if event.type == pygame.KEYDOWN:
-            # MENU
             if sm.is_state(State.MENU) and event.key == pygame.K_RETURN:
                 sm.transition(State.JANKEN_INPUT)
 
-            # JANKEN INPUT
             elif sm.is_state(State.JANKEN_INPUT):
                 key = pygame.key.name(event.key)
                 if key in JANKEN_KEYS:
-                    player_move = JANKEN_KEYS[key]
-                    ai_move_choice = ai_move()
-                    janken_outcome = janken_resolve(player_move, ai_move_choice)
-                    result_timer = RESULT_MS
+                    g["player_move"] = JANKEN_KEYS[key]
+                    g["ai_move_choice"] = ai_move()
+                    g["janken_outcome"] = janken_resolve(
+                        g["player_move"], g["ai_move_choice"]
+                    )
+                    g["result_timer"] = RESULT_MS
                     sm.transition(State.JANKEN_RESULT)
 
-            # POINT INPUT
             elif sm.is_state(State.POINT_INPUT):
                 key = pygame.key.name(event.key)
                 if key in DIR_KEYS:
-                    if attacker == "player":
-                        player_dir = DIR_KEYS[key]
-                        ai_dir = ai_direction()
-                    else:
-                        ai_dir = ai_direction()
-                        player_dir = DIR_KEYS[key]
-                    point_hit = point_resolve(
+                    player_dir = DIR_KEYS[key]
+                    ai_dir = ai_direction()
+                    g["player_dir"] = player_dir
+                    g["ai_dir"] = ai_dir
+                    attacker = g["attacker"]
+                    g["point_hit"] = point_resolve(
                         player_dir if attacker == "player" else ai_dir,
                         ai_dir if attacker == "player" else player_dir,
                     )
-                    result_timer = RESULT_MS
+                    g["result_timer"] = RESULT_MS
                     sm.transition(State.POINT_RESULT)
+
+            elif sm.is_state(State.GAME_OVER):
+                if event.key == pygame.K_r:
+                    g = make_state()
+                    continue
 
     # Auto-advance
     if sm.is_state(State.JANKEN_RESULT):
-        result_timer -= dt
-        if result_timer <= 0:
-            if janken_outcome == "DRAW":
+        g["result_timer"] -= dt
+        if g["result_timer"] <= 0:
+            if g["janken_outcome"] == "DRAW":
                 sm.transition(State.JANKEN_INPUT)
             else:
-                attacker = "player" if janken_outcome == "WIN" else "ai"
+                g["attacker"] = "player" if g["janken_outcome"] == "WIN" else "ai"
                 sm.transition(State.POINT_INPUT)
 
     if sm.is_state(State.POINT_RESULT):
-        result_timer -= dt
-        if result_timer <= 0:
-            sm.transition(State.JANKEN_INPUT)
+        g["result_timer"] -= dt
+        if g["result_timer"] <= 0:
+            # Apply damage
+            if g["point_hit"]:
+                if g["attacker"] == "player":
+                    g["ai_hp"] = max(0, g["ai_hp"] - 1)
+                else:
+                    g["player_hp"] = max(0, g["player_hp"] - 1)
+            # Check game over
+            if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
+                g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
+                sm.transition(State.GAME_OVER)
+            else:
+                sm.transition(State.JANKEN_INPUT)
 
     # --- Draw ---
     screen.fill((20, 20, 30))
+    draw_hp()
 
     if sm.is_state(State.MENU):
         draw_text("JANKEN DUEL", 250)
         draw_text("Press ENTER to start", 320, (180, 180, 180), font_sm)
 
     elif sm.is_state(State.JANKEN_INPUT):
-        draw_text("Make your move!", 200)
+        draw_text("Make your move!", 220)
         draw_text(
             "1 = Rock    2 = Paper    3 = Scissors", 300, (180, 180, 180), font_sm
         )
 
     elif sm.is_state(State.JANKEN_RESULT):
-        if player_move and ai_move_choice and janken_outcome:
-            draw_text(f"You: {player_move.value}", 180, (200, 200, 255))
-            draw_text(f"AI:  {ai_move_choice.value}", 240, (255, 180, 180))
-            color = OUTCOME_COLOR.get(janken_outcome, (255, 255, 255))
-            draw_text(janken_outcome, 330, color)
-            if janken_outcome != "DRAW":
-                who = "You attack!" if janken_outcome == "WIN" else "AI attacks!"
-                draw_text(who, 390, (220, 220, 100), font_sm)
+        if g["player_move"] and g["ai_move_choice"] and g["janken_outcome"]:
+            draw_text(f"You: {g['player_move'].value}", 180, (200, 200, 255))
+            draw_text(f"AI:  {g['ai_move_choice'].value}", 240, (255, 180, 180))
+            color = OUTCOME_COLOR.get(g["janken_outcome"], (255, 255, 255))
+            draw_text(g["janken_outcome"], 320, color)
+            if g["janken_outcome"] != "DRAW":
+                who = "You attack!" if g["janken_outcome"] == "WIN" else "AI attacks!"
+                draw_text(who, 380, (220, 220, 100), font_sm)
 
     elif sm.is_state(State.POINT_INPUT):
         who = (
             "YOU point — pick direction!"
-            if attacker == "player"
+            if g["attacker"] == "player"
             else "AI points — dodge!"
         )
-        draw_text(who, 200)
-        draw_text("↑ ↓ ← → arrow keys", 300, (180, 180, 180), font_sm)
+        draw_text(who, 220)
+        draw_text("Arrow keys to choose", 300, (180, 180, 180), font_sm)
 
     elif sm.is_state(State.POINT_RESULT):
-        if player_dir and ai_dir:
-            draw_text(f"You: {player_dir.value}   AI: {ai_dir.value}", 240)
-            if point_hit:
-                color = (255, 80, 80) if attacker == "player" else (80, 255, 80)
-                draw_text("HIT!", 330, color)
+        if g["player_dir"] and g["ai_dir"]:
+            draw_text(f"You: {g['player_dir'].value}   AI: {g['ai_dir'].value}", 240)
+            if g["point_hit"]:
+                color = (255, 80, 80) if g["attacker"] == "player" else (80, 255, 80)
+                draw_text("HIT!", 320, color)
             else:
-                draw_text("MISS!", 330, (180, 180, 180))
+                draw_text("MISS!", 320, (180, 180, 180))
+
+    elif sm.is_state(State.GAME_OVER):
+        if g["winner"] == "player":
+            draw_text("YOU WIN!", 240, (100, 255, 100), font_lg)
+        else:
+            draw_text("YOU LOSE!", 240, (255, 80, 80), font_lg)
+        draw_text("Press R to play again", 340, (180, 180, 180), font_sm)
 
     pygame.display.flip()
 
