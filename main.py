@@ -1,9 +1,10 @@
 import pygame
 import sys
 from game.state_manager import StateManager, State
-from game.janken import KEY_MAP as JANKEN_KEYS, ai_move, resolve as janken_resolve
-from game.pointing import KEY_MAP as DIR_KEYS, ai_direction, resolve as point_resolve
+from game.janken import KEY_MAP as JANKEN_KEYS, resolve as janken_resolve
+from game.pointing import KEY_MAP as DIR_KEYS, resolve as point_resolve
 from game.effects import ScreenShake, FlashOverlay
+from game.ai import AI
 
 pygame.init()
 
@@ -37,6 +38,7 @@ def make_state():
         "ai_hp": MAX_HP,
         "result_timer": 0,
         "winner": None,
+        "ai": AI(),
     }
 
 
@@ -66,7 +68,8 @@ while running:
                 key = pygame.key.name(event.key)
                 if key in JANKEN_KEYS:
                     g["player_move"] = JANKEN_KEYS[key]
-                    g["ai_move_choice"] = ai_move()
+                    g["ai_move_choice"] = g["ai"].pick_move()
+                    g["ai"].record_player_move(g["player_move"])
                     g["janken_outcome"] = janken_resolve(
                         g["player_move"], g["ai_move_choice"]
                     )
@@ -77,7 +80,8 @@ while running:
                 key = pygame.key.name(event.key)
                 if key in DIR_KEYS:
                     player_dir = DIR_KEYS[key]
-                    ai_dir = ai_direction()
+                    ai_dir = g["ai"].pick_direction()
+                    g["ai"].record_player_dir(player_dir)
                     g["player_dir"] = player_dir
                     g["ai_dir"] = ai_dir
                     attacker = g["attacker"]
