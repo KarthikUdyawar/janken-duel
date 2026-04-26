@@ -9,6 +9,7 @@ from game.score import ScoreTracker
 from game.combo import ComboTracker
 from game.taunts import TauntEngine
 from game.speed import SpeedManager
+from game.sounds import SoundEngine
 
 pygame.init()
 
@@ -26,6 +27,9 @@ shake = ScreenShake()
 flash = FlashOverlay()
 score = ScoreTracker()
 taunt = TauntEngine()
+sfx = SoundEngine()
+
+sfx.init()  # add this line
 
 MAX_HP = 5
 DIFFICULTIES = ["easy", "medium", "hard"]
@@ -202,6 +206,7 @@ while running:
                     g["janken_timer"] = g["speed"].janken_window()
                     g["janken_timed_out"] = False
                     sm.transition(State.JANKEN_INPUT)
+                    sfx.play("select")
                 elif event.key == pygame.K_LEFT:
                     selected_diff_idx = (selected_diff_idx - 1) % 3
                     reset_game(DIFFICULTIES[selected_diff_idx])
@@ -213,6 +218,8 @@ while running:
                 elif event.key == pygame.K_t:
                     enabled = taunt.toggle()
                     taunt.current_taunt = "Ollama ON" if enabled else "Offline mode"
+                elif event.key == pygame.K_s:
+                    enabled = sfx.toggle()
 
             # JANKEN INPUT
             elif sm.is_state(State.JANKEN_INPUT):
@@ -221,6 +228,7 @@ while running:
                     enabled = taunt.toggle()
                     taunt.current_taunt = "Ollama ON" if enabled else "Offline mode"
                 elif key in JANKEN_KEYS:
+                    sfx.play("select")
                     g["player_move"] = JANKEN_KEYS[key]
                     g["ai_move_choice"] = g["ai"].pick_move()
                     g["ai"].record_player_move(g["player_move"])
@@ -229,11 +237,14 @@ while running:
                     )
                     g["result_timer"] = g["speed"].result_delay()
                     sm.transition(State.JANKEN_RESULT)
+                elif event.key == pygame.K_s:
+                    enabled = sfx.toggle()
 
             # POINT INPUT
             elif sm.is_state(State.POINT_INPUT):
                 key = pygame.key.name(event.key)
                 if key in DIR_KEYS:
+                    sfx.play("select")
                     player_dir = DIR_KEYS[key]
                     ai_dir = g["ai"].pick_direction()
                     g["ai"].record_player_dir(player_dir)
@@ -262,6 +273,7 @@ while running:
         g["result_timer"] -= dt
         if g["result_timer"] <= 0:
             if g["janken_outcome"] == "DRAW":
+                sfx.play("draw")
                 g["janken_timer"] = g["speed"].janken_window()
                 g["janken_timed_out"] = False
                 sm.transition(State.JANKEN_INPUT)
@@ -274,6 +286,7 @@ while running:
     if sm.is_state(State.POINT_INPUT):
         g["point_timer"] -= dt
         if g["point_timer"] <= 0:
+            sfx.play("timeout")
             g["timed_out"] = True
             g["point_hit"] = False
             g["player_dir"] = None
@@ -291,6 +304,7 @@ while running:
     if sm.is_state(State.JANKEN_INPUT):
         g["janken_timer"] -= dt
         if g["janken_timer"] <= 0:
+            sfx.play("timeout")
             g["janken_timed_out"] = True
             g["player_move"] = None
             g["ai_move_choice"] = None
@@ -307,22 +321,27 @@ while running:
             if g["point_hit"]:
                 bonus = g["combo"].hit()
                 if g["attacker"] == "player":
+                    sfx.play("hit")
                     g["ai_hp"] = max(0, g["ai_hp"] - 1 - bonus)
                     flash.trigger((255, 80, 80), 250)
                     shake.trigger(200 + bonus * 100, 6 + bonus * 4)
                     taunt.trigger("hit", g)
                 else:
+                    sfx.play("hit")
                     g["player_hp"] = max(0, g["player_hp"] - 1 - bonus)
                     flash.trigger((80, 80, 255), 250)
                     shake.trigger(300 + bonus * 100, 10 + bonus * 4)
                     taunt.trigger("lose" if g["player_hp"] <= 1 else "low_hp", g)
                 if g["combo"].count >= 3:
+                    sfx.play("combo")
                     taunt.trigger("combo", {"combo_count": g["combo"].count, **g})
             else:
+                sfx.play("miss")
                 g["combo"].miss()
                 taunt.trigger("miss", g)
 
             if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
+                sfx.play("game_over")
                 g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
                 taunt.trigger("win" if g["winner"] == "ai" else "lose", g)
                 if g["winner"] == "player":
@@ -356,7 +375,7 @@ while running:
 
         draw_text(rs, "LEFT / RIGHT to change", 420, (120, 120, 120), font_sm)
         draw_text(
-            rs, "ENTER to start   T = toggle Ollama", 460, (180, 180, 180), font_sm
+            rs, "ENTER to start   T = Ollama   S = sound", 460, (180, 180, 180), font_sm
         )
 
         if score.rounds > 0:
