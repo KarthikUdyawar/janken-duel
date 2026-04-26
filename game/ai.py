@@ -5,9 +5,14 @@ from game.pointing import Direction
 
 
 class AI:
-    def __init__(self):
+    def __init__(self, difficulty: str = "medium"):
         self.move_history: list[Move] = []
         self.dir_history: list[Direction] = []
+        self.difficulty = difficulty
+
+        # exploit rates per difficulty
+        self.move_exploit = {"easy": 0.0, "medium": 0.7, "hard": 0.9}
+        self.dir_exploit = {"easy": 0.0, "medium": 0.65, "hard": 0.85}
 
     # --- Janken ---
     def pick_move(self) -> Move:
@@ -20,8 +25,7 @@ class AI:
             Move.PAPER: Move.SCISSORS,
             Move.SCISSORS: Move.ROCK,
         }
-        # 70% exploit, 30% random
-        if random.random() < 0.7:
+        if random.random() < self.move_exploit[self.difficulty]:
             return beats[most_common]
         return random.choice(list(Move))
 
@@ -33,9 +37,8 @@ class AI:
         if len(self.dir_history) < 3:
             return random.choice(list(Direction))
         most_common = Counter(self.dir_history[-6:]).most_common(1)[0][0]
-        # 65% exploit, 35% random
-        if random.random() < 0.65:
-            return most_common  # repeat what hit before / avoid what player picks
+        if random.random() < self.dir_exploit[self.difficulty]:
+            return most_common
         return random.choice(list(Direction))
 
     def record_player_dir(self, direction: Direction):
