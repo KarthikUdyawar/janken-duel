@@ -9,6 +9,7 @@ class State(Enum):
     POINT_RESULT = auto()
     DAMAGE = auto()
     GAME_OVER = auto()
+    PAUSED = auto()
 
 
 class StateManager:

@@ -28,8 +28,7 @@ flash = FlashOverlay()
 score = ScoreTracker()
 taunt = TauntEngine()
 sfx = SoundEngine()
-
-sfx.init()  # add this line
+sfx.init()
 
 MAX_HP = 5
 DIFFICULTIES = ["easy", "medium", "hard"]
@@ -64,6 +63,7 @@ def make_state(difficulty="medium"):
         "janken_timer": 0,
         "janken_timed_out": False,
         "timed_out": False,
+        "prev_state": None,
     }
 
 
@@ -79,7 +79,7 @@ def reset_game(difficulty=None):
     taunt.current_taunt = "..."
 
 
-# ── Draw helpers ────────────────────────────────────────────────────────────
+# ── Draw helpers ─────────────────────────────────────────────────────────────
 
 
 def draw_text(surface, text, y, color=(255, 255, 255), f=None):
@@ -140,6 +140,25 @@ def draw_taunt(surface):
         surface.blit(surf, surf.get_rect(center=(SCREEN_W // 2, 80)))
 
 
+def draw_janken_bar(surface, sm):
+    if not sm.is_state(State.JANKEN_INPUT):
+        return
+    window = g["speed"].janken_window()
+    remaining = max(0, g["janken_timer"])
+    ratio = remaining / window
+    bar_w, bar_h = 400, 16
+    x = SCREEN_W // 2 - bar_w // 2
+    y = 160
+    pygame.draw.rect(surface, (60, 60, 60), (x, y, bar_w, bar_h), border_radius=8)
+    if ratio > 0.5:
+        color = (100, 255, 100)
+    elif ratio > 0.25:
+        color = (255, 220, 50)
+    else:
+        color = (255, 60, 60)
+    pygame.draw.rect(surface, color, (x, y, int(bar_w * ratio), bar_h), border_radius=8)
+
+
 def draw_speed_bar(surface, sm):
     if not sm.is_state(State.POINT_INPUT):
         return
@@ -161,26 +180,35 @@ def draw_speed_bar(surface, sm):
     surface.blit(round_txt, (SCREEN_W - round_txt.get_width() - 20, SCREEN_H // 2 - 20))
 
 
-def draw_janken_bar(surface, sm):
-    if not sm.is_state(State.JANKEN_INPUT):
-        return
-    window = g["speed"].janken_window()
-    remaining = max(0, g["janken_timer"])
-    ratio = remaining / window
-    bar_w, bar_h = 400, 16
-    x = SCREEN_W // 2 - bar_w // 2
-    y = 160
-    pygame.draw.rect(surface, (60, 60, 60), (x, y, bar_w, bar_h), border_radius=8)
-    if ratio > 0.5:
-        color = (100, 255, 100)
-    elif ratio > 0.25:
-        color = (255, 220, 50)
-    else:
-        color = (255, 60, 60)
-    pygame.draw.rect(surface, color, (x, y, int(bar_w * ratio), bar_h), border_radius=8)
+def draw_pause(surface):
+    overlay = pygame.Surface((SCREEN_W, SCREEN_H))
+    overlay.set_alpha(160)
+    overlay.fill((0, 0, 0))
+    surface.blit(overlay, (0, 0))
+
+    draw_text(surface, "PAUSED", 180, (255, 255, 255), font_lg)
+
+    items = [
+        ("1 / 2 / 3", "Rock / Paper / Scissors"),
+        ("Arrow keys", "Pick direction"),
+        ("T", "Toggle Ollama taunts"),
+        ("S", "Toggle sound"),
+        ("ESC", "Resume"),
+        ("R", "Restart  (game over)"),
+        ("M", "Menu     (game over)"),
+    ]
+    y = 290
+    for key, desc in items:
+        k_surf = font_sm.render(key, True, (255, 220, 50))
+        d_surf = font_sm.render(desc, True, (180, 180, 180))
+        surface.blit(k_surf, (180, y))
+        surface.blit(d_surf, (340, y))
+        y += 36
+
+    draw_text(surface, "ESC to resume", 530, (120, 120, 120), font_sm)
 
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────────
 
 OUTCOME_COLOR = {
     "WIN": (100, 255, 100),
@@ -188,7 +216,7 @@ OUTCOME_COLOR = {
     "DRAW": (255, 220, 50),
 }
 
-# ── Main loop ────────────────────────────────────────────────────────────────
+# ── Main loop ─────────────────────────────────────────────────────────────────
 
 running = True
 while running:
@@ -200,8 +228,20 @@ while running:
             running = False
 
         if event.type == pygame.KEYDOWN:
+            # PAUSE toggle — checked first, works in any active game state
+            if event.key == pygame.K_ESCAPE:
+                if sm.is_state(State.PAUSED):
+                    sm.transition(g["prev_state"])
+                elif not sm.is_state(State.MENU) and not sm.is_state(State.GAME_OVER):
+                    g["prev_state"] = sm.current
+                    sm.transition(State.PAUSED)
+
+            # Skip all other input while paused
+            elif sm.is_state(State.PAUSED):
+                pass
+
             # MENU
-            if sm.is_state(State.MENU):
+            elif sm.is_state(State.MENU):
                 if event.key == pygame.K_RETURN:
                     g["janken_timer"] = g["speed"].janken_window()
                     g["janken_timed_out"] = False
@@ -219,7 +259,7 @@ while running:
                     enabled = taunt.toggle()
                     taunt.current_taunt = "Ollama ON" if enabled else "Offline mode"
                 elif event.key == pygame.K_s:
-                    enabled = sfx.toggle()
+                    sfx.toggle()
 
             # JANKEN INPUT
             elif sm.is_state(State.JANKEN_INPUT):
@@ -227,6 +267,8 @@ while running:
                 if key == "t":
                     enabled = taunt.toggle()
                     taunt.current_taunt = "Ollama ON" if enabled else "Offline mode"
+                elif key == "s":
+                    sfx.toggle()
                 elif key in JANKEN_KEYS:
                     sfx.play("select")
                     g["player_move"] = JANKEN_KEYS[key]
@@ -237,8 +279,6 @@ while running:
                     )
                     g["result_timer"] = g["speed"].result_delay()
                     sm.transition(State.JANKEN_RESULT)
-                elif event.key == pygame.K_s:
-                    enabled = sfx.toggle()
 
             # POINT INPUT
             elif sm.is_state(State.POINT_INPUT):
@@ -267,97 +307,92 @@ while running:
                     reset_game()
                     g["sm"].transition(State.MENU)
 
-    # ── Auto-advance ─────────────────────────────────────────────────────────
+    # ── Auto-advance (frozen while paused) ───────────────────────────────────
 
-    if sm.is_state(State.JANKEN_RESULT):
-        g["result_timer"] -= dt
-        if g["result_timer"] <= 0:
-            if g["janken_outcome"] == "DRAW":
-                sfx.play("draw")
-                g["janken_timer"] = g["speed"].janken_window()
-                g["janken_timed_out"] = False
-                sm.transition(State.JANKEN_INPUT)
-            else:
-                g["attacker"] = "player" if g["janken_outcome"] == "WIN" else "ai"
+    if not sm.is_state(State.PAUSED):
+        if sm.is_state(State.JANKEN_INPUT):
+            g["janken_timer"] -= dt
+            if g["janken_timer"] <= 0:
+                sfx.play("timeout")
+                g["janken_timed_out"] = True
+                g["player_move"] = None
+                g["ai_move_choice"] = None
+                g["janken_outcome"] = "LOSE"
+                g["attacker"] = "ai"
                 g["point_timer"] = g["speed"].point_window()
                 g["timed_out"] = False
-                sm.transition(State.POINT_INPUT)
+                g["result_timer"] = g["speed"].result_delay()
+                sm.transition(State.JANKEN_RESULT)
 
-    if sm.is_state(State.POINT_INPUT):
-        g["point_timer"] -= dt
-        if g["point_timer"] <= 0:
-            sfx.play("timeout")
-            g["timed_out"] = True
-            g["point_hit"] = False
-            g["player_dir"] = None
-            g["ai_dir"] = g["ai"].pick_direction()
-            g["combo"].miss()
-            g["result_timer"] = g["speed"].result_delay()
-            if g["attacker"] == "ai":
-                # AI is pointing, player failed to dodge → guaranteed hit
-                g["point_hit"] = True
-            else:
-                # Player is supposed to point but timed out → miss
-                g["point_hit"] = False
-            sm.transition(State.POINT_RESULT)
-
-    if sm.is_state(State.JANKEN_INPUT):
-        g["janken_timer"] -= dt
-        if g["janken_timer"] <= 0:
-            sfx.play("timeout")
-            g["janken_timed_out"] = True
-            g["player_move"] = None
-            g["ai_move_choice"] = None
-            g["janken_outcome"] = "LOSE"  # timeout = lose janken
-            g["attacker"] = "ai"
-            g["point_timer"] = g["speed"].point_window()
-            g["timed_out"] = False
-            g["result_timer"] = g["speed"].result_delay()
-            sm.transition(State.JANKEN_RESULT)
-
-    if sm.is_state(State.POINT_RESULT):
-        g["result_timer"] -= dt
-        if g["result_timer"] <= 0:
-            if g["point_hit"]:
-                bonus = g["combo"].hit()
-                if g["attacker"] == "player":
-                    sfx.play("hit")
-                    g["ai_hp"] = max(0, g["ai_hp"] - 1 - bonus)
-                    flash.trigger((255, 80, 80), 250)
-                    shake.trigger(200 + bonus * 100, 6 + bonus * 4)
-                    taunt.trigger("hit", g)
+        if sm.is_state(State.JANKEN_RESULT):
+            g["result_timer"] -= dt
+            if g["result_timer"] <= 0:
+                if g["janken_outcome"] == "DRAW":
+                    sfx.play("draw")
+                    g["janken_timer"] = g["speed"].janken_window()
+                    g["janken_timed_out"] = False
+                    sm.transition(State.JANKEN_INPUT)
                 else:
-                    sfx.play("hit")
-                    g["player_hp"] = max(0, g["player_hp"] - 1 - bonus)
-                    flash.trigger((80, 80, 255), 250)
-                    shake.trigger(300 + bonus * 100, 10 + bonus * 4)
-                    taunt.trigger("lose" if g["player_hp"] <= 1 else "low_hp", g)
-                if g["combo"].count >= 3:
-                    sfx.play("combo")
-                    taunt.trigger("combo", {"combo_count": g["combo"].count, **g})
-            else:
-                sfx.play("miss")
+                    g["attacker"] = "player" if g["janken_outcome"] == "WIN" else "ai"
+                    g["point_timer"] = g["speed"].point_window()
+                    g["timed_out"] = False
+                    sm.transition(State.POINT_INPUT)
+
+        if sm.is_state(State.POINT_INPUT):
+            g["point_timer"] -= dt
+            if g["point_timer"] <= 0:
+                sfx.play("timeout")
+                g["timed_out"] = True
+                g["player_dir"] = None
+                g["ai_dir"] = g["ai"].pick_direction()
                 g["combo"].miss()
-                taunt.trigger("miss", g)
+                g["result_timer"] = g["speed"].result_delay()
+                g["point_hit"] = g["attacker"] == "ai"  # hit only if AI was attacker
+                sm.transition(State.POINT_RESULT)
 
-            if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
-                sfx.play("game_over")
-                g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
-                taunt.trigger("win" if g["winner"] == "ai" else "lose", g)
-                if g["winner"] == "player":
-                    score.record_win()
+        if sm.is_state(State.POINT_RESULT):
+            g["result_timer"] -= dt
+            if g["result_timer"] <= 0:
+                if g["point_hit"]:
+                    bonus = g["combo"].hit()
+                    if g["attacker"] == "player":
+                        sfx.play("hit")
+                        g["ai_hp"] = max(0, g["ai_hp"] - 1 - bonus)
+                        flash.trigger((255, 80, 80), 250)
+                        shake.trigger(200 + bonus * 100, 6 + bonus * 4)
+                        taunt.trigger("hit", g)
+                    else:
+                        sfx.play("hit")
+                        g["player_hp"] = max(0, g["player_hp"] - 1 - bonus)
+                        flash.trigger((80, 80, 255), 250)
+                        shake.trigger(300 + bonus * 100, 10 + bonus * 4)
+                        taunt.trigger("lose" if g["player_hp"] <= 1 else "low_hp", g)
+                    if g["combo"].count >= 3:
+                        sfx.play("combo")
+                        taunt.trigger("combo", {"combo_count": g["combo"].count, **g})
                 else:
-                    score.record_loss()
-                sm.transition(State.GAME_OVER)
-            else:
-                g["janken_timer"] = g["speed"].janken_window()
-                g["janken_timed_out"] = False
-                g["speed"].next_round()
-                sm.transition(State.JANKEN_INPUT)
+                    sfx.play("miss")
+                    g["combo"].miss()
+                    taunt.trigger("miss", g)
 
-    # ── Draw ─────────────────────────────────────────────────────────────────
+                if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
+                    sfx.play("game_over")
+                    g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
+                    taunt.trigger("win" if g["winner"] == "ai" else "lose", g)
+                    if g["winner"] == "player":
+                        score.record_win()
+                    else:
+                        score.record_loss()
+                    sm.transition(State.GAME_OVER)
+                else:
+                    g["janken_timer"] = g["speed"].janken_window()
+                    g["janken_timed_out"] = False
+                    g["speed"].next_round()
+                    sm.transition(State.JANKEN_INPUT)
 
-    ox, oy = shake.update(dt)
+    # ── Draw ──────────────────────────────────────────────────────────────────
+
+    ox, oy = shake.update(dt) if not sm.is_state(State.PAUSED) else (0, 0)
     rs = pygame.Surface((SCREEN_W, SCREEN_H))
     rs.fill((20, 20, 30))
 
@@ -393,10 +428,15 @@ while running:
         draw_score(rs)
         draw_combo(rs)
         draw_taunt(rs)
-        draw_janken_bar(rs, sm)
-        draw_speed_bar(rs, sm)
 
-        if sm.is_state(State.JANKEN_INPUT):
+        if not sm.is_state(State.PAUSED):
+            draw_janken_bar(rs, sm)
+            draw_speed_bar(rs, sm)
+
+        if sm.is_state(State.PAUSED):
+            draw_pause(rs)
+
+        elif sm.is_state(State.JANKEN_INPUT):
             draw_text(rs, "Make your move!", 220)
             draw_text(
                 rs,
