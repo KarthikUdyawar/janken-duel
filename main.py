@@ -280,6 +280,12 @@ while running:
             g["ai_dir"] = g["ai"].pick_direction()
             g["combo"].miss()
             g["result_timer"] = g["speed"].result_delay()
+            if g["attacker"] == "ai":
+                # AI is pointing, player failed to dodge → guaranteed hit
+                g["point_hit"] = True
+            else:
+                # Player is supposed to point but timed out → miss
+                g["point_hit"] = False
             sm.transition(State.POINT_RESULT)
 
     if sm.is_state(State.JANKEN_INPUT):
@@ -407,7 +413,10 @@ while running:
 
         elif sm.is_state(State.POINT_RESULT):
             if g.get("timed_out"):
-                draw_text(rs, "TOO SLOW!", 240, (255, 60, 60))
+                if g["point_hit"]:
+                    draw_text(rs, "TOO SLOW — HIT!", 240, (255, 60, 60))
+                else:
+                    draw_text(rs, "TOO SLOW — MISS!", 240, (255, 140, 0))
             elif g["player_dir"] and g["ai_dir"]:
                 draw_text(
                     rs, f"You: {g['player_dir'].value}   AI: {g['ai_dir'].value}", 240
