@@ -5,7 +5,9 @@ from game.janken import KEY_MAP as JANKEN_KEYS, resolve as janken_resolve
 from game.pointing import KEY_MAP as DIR_KEYS, resolve as point_resolve
 from game.effects import ScreenShake, FlashOverlay
 from game.ai import AI
+from game.score import ScoreTracker
 
+score = ScoreTracker()
 pygame.init()
 
 SCREEN_W, SCREEN_H = 800, 600
@@ -75,6 +77,15 @@ def draw_hp(surface):
         (120, 200, 255),
     )
     surface.blit(pl_label, (20, SCREEN_H - 40))
+
+
+def draw_score(surface):
+    txt = font_sm.render(
+        f"W: {score.wins}  L: {score.losses}  ({score.win_rate()})",
+        True,
+        (160, 160, 160),
+    )
+    surface.blit(txt, (SCREEN_W // 2 - txt.get_width() // 2, SCREEN_H - 75))
 
 
 def draw_difficulty_label(surface):
@@ -182,6 +193,10 @@ while running:
                     shake.trigger(300, 10)
             if g["player_hp"] <= 0 or g["ai_hp"] <= 0:
                 g["winner"] = "player" if g["ai_hp"] <= 0 else "ai"
+                if g["winner"] == "player":
+                    score.record_win()
+                else:
+                    score.record_loss()
                 sm.transition(State.GAME_OVER)
             else:
                 sm.transition(State.JANKEN_INPUT)
@@ -209,6 +224,7 @@ while running:
     else:
         draw_hp(rs)
         draw_difficulty_label(rs)
+        draw_score(rs)
 
         if sm.is_state(State.JANKEN_INPUT):
             draw_text(rs, "Make your move!", 220)
@@ -260,6 +276,14 @@ while running:
             else:
                 draw_text(rs, "YOU LOSE!", 220, (255, 80, 80), font_lg)
             draw_text(rs, "R = play again   M = menu", 340, (180, 180, 180), font_sm)
+            if score.rounds > 0:
+                draw_text(
+                    rs,
+                    f"Session: {score.wins}W - {score.losses}L  ({score.win_rate()})",
+                    420,
+                    (120, 120, 120),
+                    font_sm,
+                )
 
     flash.update(dt, rs)
     screen.blit(rs, (ox, oy))
