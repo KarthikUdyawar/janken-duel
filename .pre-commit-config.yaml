@@ -25,7 +25,7 @@ repos:
         args: [ --maxkb=1024 ]
       - id: no-commit-to-branch
         args:
-          - --branch=main
+          - --branch=master
           - --branch=develop
           - --pattern=release/.*
 

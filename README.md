@@ -219,4 +219,14 @@ docker exec -it ollama ollama pull llama3.2
 
 ## 📄 License
 
-MIT
+[MIT](LICENSE)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome!
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
+
+> ⚠️ All pull requests should target the `develop` branch.
