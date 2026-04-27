@@ -1,11 +1,12 @@
 import threading
 import requests
 import json
+from typing import Dict, Any
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "llama3.2"  # change to your local model
 
-DEFAULT_TAUNTS = {
+DEFAULT_TAUNTS: Dict[str, str] = {
     "win": "Lucky shot...",
     "lose": "Too easy!",
     "hit": "That hurt? Good.",
@@ -16,12 +17,12 @@ DEFAULT_TAUNTS = {
 
 
 class TauntEngine:
-    def __init__(self):
-        self.current_taunt = "..."
-        self.enabled = True
-        self._lock = threading.Lock()
+    def __init__(self) -> None:
+        self.current_taunt: str = "..."
+        self.enabled: bool = True
+        self._lock: threading.Lock = threading.Lock()
 
-    def _build_prompt(self, context: dict) -> str:
+    def _build_prompt(self, context: Dict[str, Any]) -> str:
         return (
             f"You are a cocky arcade game AI opponent in a Rock-Paper-Scissors duel game. "
             f"Game state: {json.dumps(context)}. "
@@ -29,7 +30,7 @@ class TauntEngine:
             f"Be funny, cocky, or menacing. Just the taunt, nothing else."
         )
 
-    def _fetch(self, context: dict):
+    def _fetch(self, context: Dict[str, Any]) -> None:
         try:
             resp = requests.post(
                 OLLAMA_URL,
@@ -41,31 +42,37 @@ class TauntEngine:
                 timeout=5,
             )
             if resp.status_code == 200:
-                text = resp.json().get("response", "").strip()
+                text: str = resp.json().get("response", "").strip()
                 if text:
                     with self._lock:
                         self.current_taunt = text[:60]  # cap length
-        except Exception:
+        except Exception:  # nosec B110
             pass  # silently fall back to current taunt
 
-    def trigger(self, event: str, game_state: dict):
+    def trigger(self, event: str, game_state: Dict[str, Any]) -> None:
         if not self.enabled:
             self.current_taunt = DEFAULT_TAUNTS.get(event, "...")
             return
-        context = {
+
+        context: Dict[str, Any] = {
             "event": event,
             "player_hp": game_state.get("player_hp"),
             "ai_hp": game_state.get("ai_hp"),
             "combo": game_state.get("combo_count", 0),
             "attacker": game_state.get("attacker"),
         }
+
         # fire and forget — non-blocking
-        threading.Thread(target=self._fetch, args=(context,), daemon=True).start()
+        threading.Thread(
+            target=self._fetch,
+            args=(context,),
+            daemon=True,
+        ).start()
 
     def get(self) -> str:
         with self._lock:
             return self.current_taunt
 
-    def toggle(self):
+    def toggle(self) -> bool:
         self.enabled = not self.enabled
         return self.enabled

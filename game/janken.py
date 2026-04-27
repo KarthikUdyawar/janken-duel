@@ -8,7 +8,7 @@ class Move(Enum):
     SCISSORS = "Scissors"
 
 
-KEY_MAP = {
+KEY_MAP: dict[str, Move] = {
     "1": Move.ROCK,
     "2": Move.PAPER,
     "3": Move.SCISSORS,
@@ -16,11 +16,15 @@ KEY_MAP = {
 
 
 def ai_move() -> Move:
-    return random.choice(list(Move))
+    return random.choice(list(Move))  # nosec B311
 
 
 def resolve(player: Move, ai: Move) -> str:
     if player == ai:
         return "DRAW"
-    wins = {Move.ROCK: Move.SCISSORS, Move.PAPER: Move.ROCK, Move.SCISSORS: Move.PAPER}
+    wins: dict[Move, Move] = {
+        Move.ROCK: Move.SCISSORS,
+        Move.PAPER: Move.ROCK,
+        Move.SCISSORS: Move.PAPER,
+    }
     return "WIN" if wins[player] == ai else "LOSE"

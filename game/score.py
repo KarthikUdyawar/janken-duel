@@ -1,14 +1,14 @@
 class ScoreTracker:
-    def __init__(self):
-        self.wins = 0
-        self.losses = 0
-        self.rounds = 0
+    def __init__(self) -> None:
+        self.wins: int = 0
+        self.losses: int = 0
+        self.rounds: int = 0
 
-    def record_win(self):
+    def record_win(self) -> None:
         self.wins += 1
         self.rounds += 1
 
-    def record_loss(self):
+    def record_loss(self) -> None:
         self.losses += 1
         self.rounds += 1
 

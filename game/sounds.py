@@ -1,5 +1,6 @@
 import numpy as np
 import pygame
+from typing import Dict
 
 
 def _generate(
@@ -9,8 +10,8 @@ def _generate(
     wave: str = "sine",
     decay: bool = True,
 ) -> pygame.mixer.Sound:
-    sample_rate = 44100
-    samples = int(sample_rate * duration_ms / 1000)
+    sample_rate: int = 44100
+    samples: int = int(sample_rate * duration_ms / 1000)
     t = np.linspace(0, duration_ms / 1000, samples, False)
 
     if wave == "sine":
@@ -32,11 +33,11 @@ def _generate(
 
 
 class SoundEngine:
-    def __init__(self):
-        self.enabled = True
-        self._sounds: dict = {}
+    def __init__(self) -> None:
+        self.enabled: bool = True
+        self._sounds: Dict[str, pygame.mixer.Sound] = {}
 
-    def init(self):
+    def init(self) -> None:
         """Call after pygame.init()"""
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
         self._sounds = {
@@ -51,9 +52,10 @@ class SoundEngine:
             "game_over": _generate(110, 600, 0.4, "square", decay=True),
         }
 
-    def play(self, name: str):
+    def play(self, name: str) -> None:
         if not self.enabled or not self._sounds:
             return
+
         sound = self._sounds.get(name)
         if sound:
             sound.play()

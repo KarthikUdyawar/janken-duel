@@ -9,3 +9,12 @@ dependencies = [
     "pygame>=2.6.1",
     "requests>=2.33.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+]
+
+[tool.bandit]
+skips = ["B311", "B110"]
+exclude_dirs = ["tests"]

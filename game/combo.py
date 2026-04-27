@@ -1,7 +1,7 @@
 class ComboTracker:
-    def __init__(self):
-        self.count = 0
-        self.max_combo = 0
+    def __init__(self) -> None:
+        self.count: int = 0
+        self.max_combo: int = 0
 
     def hit(self) -> int:
         """Call on hit. Returns bonus damage (0 or 1)."""
@@ -12,9 +12,9 @@ class ComboTracker:
             return 1  # bonus damage every 3 hits
         return 0
 
-    def miss(self):
+    def miss(self) -> None:
         self.count = 0
 
-    def reset(self):
+    def reset(self) -> None:
         self.count = 0
         self.max_combo = 0

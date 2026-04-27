@@ -9,7 +9,7 @@ class Direction(Enum):
     RIGHT = "→"
 
 
-KEY_MAP = {
+KEY_MAP: dict[str, Direction] = {
     "up": Direction.UP,
     "down": Direction.DOWN,
     "left": Direction.LEFT,
@@ -18,7 +18,7 @@ KEY_MAP = {
 
 
 def ai_direction() -> Direction:
-    return random.choice(list(Direction))
+    return random.choice(list(Direction))  # nosec B311
 
 
 def resolve(attacker_dir: Direction, defender_dir: Direction) -> bool:

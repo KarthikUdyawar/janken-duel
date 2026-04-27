@@ -13,10 +13,10 @@ class State(Enum):
 
 
 class StateManager:
-    def __init__(self):
-        self.current = State.MENU
+    def __init__(self) -> None:
+        self.current: State = State.MENU
 
-    def transition(self, new_state: State):
+    def transition(self, new_state: State) -> None:
         self.current = new_state
 
     def is_state(self, state: State) -> bool:

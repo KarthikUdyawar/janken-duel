@@ -1,0 +1,77 @@
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  # Very fast basic checks first
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [ --markdown-linebreak-ext=md ]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [ --fix=lf ]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
+      - id: check-ast
+      - id: debug-statements
+        language_version: python3
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [ --maxkb=1024 ]
+      - id: no-commit-to-branch
+        args:
+          - --branch=main
+          - --branch=develop
+          - --pattern=release/.*
+
+  # ────────────────────────────────────────────────
+  # Python formatting & import sorting & autofixes
+  # ────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.4
+    hooks:
+      - id: ruff
+        name: Ruff (lint + autofix)
+        args: [ --fix, --exit-non-zero-on-fix, --verbose ]
+      - id: ruff-format
+        name: Ruff (format)
+        args: [ --verbose ]
+
+  # ────────────────────────────────────────────────
+  # Security & secret scanning
+  # ────────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: [--format=screen, --quiet, --skip=B311,B110]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # ────────────────────────────────────────────────
+  # Type checking (runs last – slowest)
+  # ────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        files: \.pyi?$
+        exclude: ^tests/
+        args:
+          [
+            --strict,
+            --ignore-missing-imports,
+            --explicit-package-bases,
+            --disable-error-code=untyped-decorator,
+          ]
+        additional_dependencies:
+          - numpy
+          - types-requests

@@ -166,7 +166,7 @@ janken-duel/
 ### Install & Run
 
 ```bash
-git clone https://github.com/yourname/janken-duel
+git clone https://github.com/KarthikUdyawar/janken-duel
 cd janken-duel
 uv sync
 uv run main.py
